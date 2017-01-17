@@ -1,0 +1,68 @@
+[%- TAGS outline -%][%- PROCESS templates/common -%]
+-- Deploy [% project %]:[% change %] to [% engine %]
+%% FOREACH item IN requires
+-- requires: [% item %]
+%% END
+%% FOREACH item IN conflicts
+-- conflicts: [% item %]
+%% END
+
+BEGIN;
+
+CREATE TABLE IF NOT EXISTS [% qualified(table) %] (
+  id BIGSERIAL PRIMARY KEY,
+  catalog_id BIGINT NOT NULL,
+%% FOREACH col IN fk
+  [% col %] BIGINT NOT NULL,
+%% END
+  external_code TEXT NOT NULL,
+%% FOREACH col IN column
+  [% col %] [% type.item(loop.index) or 'TEXT' %] NOT NULL,
+%% END
+  data JSONB NOT NULL DEFAULT '{}'::JSONB,
+  images JSONB NOT NULL DEFAULT '{}'::JSONB,
+  urls JSONB NOT NULL DEFAULT '{}'::JSONB,
+%% FOREACH col IN json
+  [% col %] JSONB NOT NULL DEFAULT '{}'::JSONB,
+%% END
+  deleted_at TIMESTAMP WITHOUT TIME ZONE NOT NULL
+    DEFAULT '0001-01-01 00:00:00'::TIMESTAMP WITHOUT TIME ZONE,
+  created_at TIMESTAMP WITHOUT TIME ZONE NOT NULL DEFAULT now(),
+  updated_at TIMESTAMP WITHOUT TIME ZONE NOT NULL DEFAULT now(),
+
+  CONSTRAINT [% table %]_catalog_id_fkey
+    FOREIGN KEY (catalog_id)
+    REFERENCES [% qualified('catalogs') %](id)
+    ON DELETE CASCADE DEFERRABLE INITIALLY DEFERRED,
+%% FOREACH col IN fk
+  CONSTRAINT [% table %]_[% col %]_fkey
+    FOREIGN KEY ([% col %])
+    REFERENCES [% qualified(ref.item(loop.index) OR '<TABLE>') %](id)
+    ON DELETE CASCADE DEFERRABLE INITIALLY DEFERRED,
+%% END
+  CONSTRAINT [% table %]_external_code_required
+    CHECK ((external_code IS NOT NULL) AND (btrim(external_code::text) <> ''::text)),
+  CONSTRAINT [% table %]_uk_catalog_id_external_code_and_deleted_at
+    UNIQUE (catalog_id, external_code, deleted_at)
+);
+
+DO $$BEGIN
+  PERFORM [% qualified('presence_validation') %](
+    '[% table %]', 'catalog_id', '[% table %]_catalog_id_required'
+  );
+%% FOR col IN fk
+  PERFORM [% qualified('presence_validation') %](
+    '[% table %]', '[% col %]',
+    '[% table %]_[% col %]_required'
+  );
+%% END
+  PERFORM [% qualified('presence_validation') %](
+    '[% table %]', 'external_code', '[% table %]_external_code_required'
+  );
+  PERFORM [% qualified('unique_validation') %](
+    '[% table %]', ARRAY['catalog_id', 'external_code', 'deleted_at'],
+    '[% table %]_uk_catalog_id_external_code_and_deleted_at'
+  );
+END$$;
+
+COMMIT;

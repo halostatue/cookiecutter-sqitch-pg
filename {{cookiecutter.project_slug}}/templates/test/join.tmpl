@@ -1,0 +1,71 @@
+[%- TAGS outline -%][%- PROCESS templates/common -%]
+-- Test [% project %]:[% change %] on [% engine %]
+%% SET test_count = 2
+%% SET test_count = test_count + (syntheticpk ? 6 : 1)
+%% SET test_count = test_count + (column ? (column.list.size * 4) : 0)
+%% SET test_count = test_count + (json ? (json.list.size * 5) : 0)
+%% SET test_count = test_count + (fk ? (fk.list.size * 6) : 0)
+
+SET client_min_messages TO warning;
+CREATE EXTENSION IF NOT EXISTS pgtap;
+RESET client_min_messages;
+SET search_path TO [% IF schema %][% schema %],[% END %]public;
+
+BEGIN;
+SELECT plan([% test_count %]);
+
+SELECT has_table('[% table %]');
+SELECT has_pk('[% table %]');
+
+%% IF syntheticpk
+\set col $$[% table %]$$, $$id$$
+
+SELECT has_column(:col);
+SELECT col_type_is(:col, 'bigint');
+SELECT col_has_default(:col);
+SELECT col_default_is(:col, $$nextval('[% table %]_id_seq'::regclass)$$);
+SELECT col_is_pk(:col);
+SELECT col_is_unique(
+  '[% table %]',
+  ARRAY['[% fk.join("', '") %]']
+);
+%% ELSE
+SELECT col_is_pk(
+  '[% table %]',
+  ARRAY['[% fk.join("', '") %]']
+);
+%% END
+
+%% FOREACH col IN fk
+\set col $$[% table %]$$, $$[% col %]$$
+
+SELECT has_column(:col);
+SELECT col_type_is(:col, 'bigint');
+SELECT col_hasnt_default(:col);
+SELECT col_is_fk(:col);
+SELECT col_not_null(:col);
+SELECT fk_ok(:col, '[% ref.item(loop.index) or '<TABLE>' %]', 'id');
+
+%% END
+%% FOREACH col IN column
+\set col $$[% table %]$$, $$[% col %]$$
+
+%% SET coltype = (type.item(loop.index) or 'TEXT')
+SELECT has_column(:col);
+SELECT col_type_is(:col, '[% coltype.lower %]');
+SELECT col_not_null(:col);
+SELECT col_hasnt_default(:col);
+
+%% END
+%% FOREACH col IN json
+\set col $$[% table %]$$, $$[% col %]$$
+
+SELECT has_column(:col);
+SELECT col_type_is(:col, 'jsonb');
+SELECT col_not_null(:col);
+SELECT col_has_default(:col);
+SELECT col_default_is(:col, '{}'::jsonb);
+
+%% END
+SELECT finish();
+ROLLBACK;

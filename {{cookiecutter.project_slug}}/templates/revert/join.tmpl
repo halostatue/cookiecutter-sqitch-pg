@@ -1,0 +1,12 @@
+[%- TAGS outline -%][%- PROCESS templates/common -%]
+-- Revert [% project %]:[% change %] from [% engine %]
+
+BEGIN;
+
+DO $$BEGIN
+  PERFORM [% qualified('delete_constraint_validation') %]('[% table %]');
+END$$;
+
+DROP TABLE [% qualified(table) %];
+
+COMMIT;

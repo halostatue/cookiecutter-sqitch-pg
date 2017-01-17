@@ -1,0 +1,10 @@
+[%- TAGS outline -%][%- PROCESS templates/common -%]
+-- Verify [% project %]:[% change %] on [% engine %]
+
+[% IF schema %]SET search_path TO [% schema %],public;[% END -%]
+
+BEGIN;
+
+-- XXX Add verifications here.
+
+ROLLBACK;

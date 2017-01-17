@@ -1,0 +1,64 @@
+[%- TAGS outline -%][%- PROCESS templates/common -%]
+-- Deploy [% project %]:[% change %] to [% engine %]
+%% FOREACH item IN requires
+-- requires: [% item %]
+%% END
+%% FOREACH item IN conflicts
+-- conflicts: [% item %]
+%% END
+
+BEGIN;
+
+CREATE TABLE IF NOT EXISTS [% qualified(table) %] (
+%% IF syntheticpk
+  id BIGSERIAL PRIMARY KEY,
+
+%% END
+  [% parent_id %] BIGINT NOT NULL,
+  locale TEXT NOT NULL,
+%% FOREACH col IN column
+  [% col %] [% type.item(loop.index) or 'TEXT' %] NOT NULL,
+%% END
+  data JSONB NOT NULL DEFAULT '{}'::JSONB,
+  images JSONB NOT NULL DEFAULT '{}'::JSONB,
+  urls JSONB NOT NULL DEFAULT '{}'::JSONB,
+%% FOREACH col IN json
+  [% col %] JSONB NOT NULL DEFAULT '{}'::JSONB,
+%% END
+  created_at TIMESTAMP WITHOUT TIME ZONE NOT NULL DEFAULT now(),
+  updated_at TIMESTAMP WITHOUT TIME ZONE NOT NULL DEFAULT now(),
+
+%% IF syntheticpk
+  CONSTRAINT [% table %]_pkey
+    PRIMARY KEY (id),
+  CONSTRAINT [% table %]_unique_on_[% parent_id %]_and_locale
+    UNIQUE ([% parent_id %], locale),
+%% ELSE
+  CONSTRAINT [% table %]_pkey
+    PRIMARY KEY ([% parent_id %], locale),
+%% END
+  CONSTRAINT [% table %]_locale_required
+    CHECK ((locale IS NOT NULL) AND (btrim(locale::text) <> ''::text)),
+  CONSTRAINT [% table %]_[% parent_id %]_fkey
+    FOREIGN KEY ([% parent_id %])
+    REFERENCES [% qualified(parent_table) %](id)
+    ON DELETE CASCADE DEFERRABLE INITIALLY DEFERRED
+);
+
+DO $$BEGIN
+  PERFORM [% qualified('presence_validation') %](
+    '[% table %]', 'locale', '[% table %]_locale_required'
+  );
+  PERFORM [% qualified('presence_validation') %](
+    '[% table %]', '[% parent_id %]',
+    '[% table %]_[% parent_id %]_required'
+  );
+%% IF syntheticpk
+  PERFORM [% qualified('unique_validation') %](
+    '[% table %]', ARRAY['[% parent_id %]', 'locale'],
+    '[% table %]_[% parent_id %]_required'
+  );
+%% END
+END$$;
+
+COMMIT;

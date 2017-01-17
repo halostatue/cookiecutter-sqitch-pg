@@ -1,0 +1,23 @@
+[%- TAGS outline -%][%- PROCESS templates/common -%]
+-- Verify [% project %]:[% change %] on [% engine %]
+%% SET vcols = []
+%% SET vcols = [ 'id' ] IF syntheticpk
+%% CALL vcols.import(fk.list, column.list, json.list)
+%% CALL vcols.import([ 'deleted_at' ]) IF softdelete
+%% CALL vcols.import([ 'created_at', 'updated_at' ])
+
+BEGIN;
+
+SELECT [% vcols.join(', ') %]
+  FROM [% qualified(table) %]
+ WHERE FALSE;
+
+%% FOR col IN fk
+SELECT [% qualified('has_constraint_validation') %](
+  '[% table %]',
+  '[% table %]_[% col %]_required',
+  throw := true
+);
+%% END
+
+ROLLBACK;

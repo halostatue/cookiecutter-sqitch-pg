@@ -1,0 +1,28 @@
+[%- TAGS outline -%][%- PROCESS templates/common -%]
+-- Verify [% project %]:[% change %] on [% engine %]
+%% SET vcols = []
+%% SET vcols = [ 'id' ] IF syntheticpk
+%% CALL vcols.import(fk.list, column.list, json.list)
+
+BEGIN;
+
+SELECT [% vcols.join(', ') %]
+  FROM [% qualified(table) %]
+ WHERE FALSE;
+
+%% FOR col IN fk
+SELECT [% qualified('has_constraint_validation') %](
+  '[% table %]',
+  '[% table %]_[% col %]_required',
+  throw := true
+);
+%% END
+%% IF syntheticpk
+SELECT [% qualified('has_constraint_validation') %](
+  '[% table %]',
+  '[% table %]_uk_[% fk.join('_') %]',
+  throw := true
+);
+%% END
+
+ROLLBACK;

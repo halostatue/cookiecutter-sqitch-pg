@@ -1,0 +1,15 @@
+[%- TAGS outline -%][%- PROCESS templates/common -%]
+-- Test [% project %]:[% change %] on [% engine %]
+
+SET client_min_messages TO warning;
+CREATE EXTENSION IF NOT EXISTS pgtap;
+RESET client_min_messages;
+[% IF schema %]SET search_path TO [% schema %],public;[% END -%]
+
+BEGIN;
+SELECT plan(1);
+
+SELECT fail('Write tests for [% change %]!');
+
+SELECT finish();
+ROLLBACK;

@@ -1,0 +1,36 @@
+[%- TAGS outline -%][%- PROCESS templates/common -%]
+-- Verify [% project %]:[% change %] on [% engine %]
+%% SET vcols = [ 'id', 'catalog_id' ]
+%% CALL vcols.import(fk.list)
+%% CALL vcols.import([ 'external_code' ], column.list)
+%% CALL vcols.import([ 'data', 'images', 'urls' ], json.list)
+%% CALL vcols.import([ 'deleted_at', 'created_at', 'updated_at' ])
+
+BEGIN;
+
+SELECT [% vcols.join(', ') %]
+  FROM [% qualified(table) %]
+ WHERE FALSE;
+
+SELECT [% qualified('has_constraint_validation') %](
+  '[% table %]', '[% table %]_external_code_required',
+  throw := true
+);
+SELECT [% qualified('has_constraint_validation') %](
+  '[% table %]', '[% table %]_catalog_id_required',
+  throw := true
+);
+%% FOR col IN fk
+SELECT [% qualified('has_constraint_validation') %](
+  '[% table %]',
+  '[% table %]_[% col %]_required',
+  throw := true
+);
+%% END
+SELECT [% qualified('has_constraint_validation') %](
+  '[% table %]',
+  '[% table %]_uk_catalog_id_external_code_and_deleted_at',
+  throw := true
+);
+
+ROLLBACK;

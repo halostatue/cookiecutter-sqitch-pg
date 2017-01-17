@@ -1,0 +1,128 @@
+[%- TAGS outline -%][%- PROCESS templates/common -%]
+-- Test [% project %]:[% change %] on [% engine %]
+%% SET test_count = 49
+%% SET test_count = test_count + (column ? (column.size * 4) : 0)
+%% SET test_count = test_count + (json ? (json.size * 5) : 0)
+%% SET test_count = test_count + (fk ? (fk.size * 6) : 0)
+
+SET client_min_messages TO warning;
+CREATE EXTENSION IF NOT EXISTS pgtap;
+RESET client_min_messages;
+SET search_path TO [% IF schema %][% schema %],[% END %]public;
+
+BEGIN;
+SELECT plan([% test_count %]);
+
+SELECT has_table('[% table %]');
+SELECT has_pk('[% table %]');
+
+\set col $$[% table %]$$, $$id$$
+
+SELECT has_column(:col);
+SELECT col_type_is(:col, 'bigint');
+SELECT col_has_default(:col);
+SELECT col_default_is(:col, $$nextval('[% table %]_id_seq'::regclass)$$);
+SELECT col_is_pk(:col);
+
+\set col $$[% table %]$$, $$catalog_id$$
+
+SELECT has_column(:col);
+SELECT col_type_is(:col, 'bigint');
+SELECT col_hasnt_default(:col);
+SELECT col_is_fk(:col);
+SELECT col_not_null(:col);
+SELECT fk_ok(:col, 'catalogs', 'id');
+
+%% FOREACH col IN fk
+\set col $$[% table %]$$, $$[% col %]$$
+
+SELECT has_column(:col);
+SELECT col_type_is(:col, 'bigint');
+SELECT col_hasnt_default(:col);
+SELECT col_is_fk(:col);
+SELECT col_not_null(:col);
+SELECT fk_ok(:col, '[% ref.item(loop.index) or 'TABLE' %]', 'id');
+
+%% END
+\set col $$[% table %]$$, $$external_code$$
+
+SELECT has_column(:col);
+SELECT col_type_is(:col, 'text');
+SELECT col_not_null(:col);
+SELECT col_hasnt_default(:col);
+SELECT col_has_check(:col);
+
+%% FOREACH col IN column
+\set col $$[% table %]$$, $$[% col %]$$
+
+%% SET coltype = (type.item(loop.index) or 'TEXT')
+SELECT has_column(:col);
+SELECT col_type_is(:col, '[% coltype.lower %]');
+SELECT col_not_null(:col);
+SELECT col_hasnt_default(:col);
+
+%% END
+\set col $$[% table %]$$, $$data$$
+
+SELECT has_column(:col);
+SELECT col_type_is(:col, 'jsonb');
+SELECT col_not_null(:col);
+SELECT col_has_default(:col);
+SELECT col_default_is(:col, '{}'::jsonb);
+
+\set col $$[% table %]$$, $$images$$
+
+SELECT has_column(:col);
+SELECT col_type_is(:col, 'jsonb');
+SELECT col_not_null(:col);
+SELECT col_has_default(:col);
+SELECT col_default_is(:col, '{}'::jsonb);
+
+\set col $$[% table %]$$, $$urls$$
+
+SELECT has_column(:col);
+SELECT col_type_is(:col, 'jsonb');
+SELECT col_not_null(:col);
+SELECT col_has_default(:col);
+SELECT col_default_is(:col, '{}'::jsonb);
+
+%% FOREACH col IN json
+\set col $$[% table %]$$, $$[% col %]$$
+
+SELECT has_column(:col);
+SELECT col_type_is(:col, 'jsonb');
+SELECT col_not_null(:col);
+SELECT col_has_default(:col);
+SELECT col_default_is(:col, '{}'::jsonb);
+
+%% END
+\set col $$[% table %]$$, $$deleted_at$$
+
+SELECT has_column(:col);
+SELECT col_type_is(:col, 'timestamp without time zone');
+SELECT col_not_null(:col);
+SELECT col_has_default(:col);
+SELECT col_default_is(:col, '0001-01-01 00:00:00'::TIMESTAMP WITHOUT TIME ZONE);
+
+\set col $$[% table %]$$, $$created_at$$
+
+SELECT has_column(:col);
+SELECT col_type_is(:col, 'timestamp without time zone');
+SELECT col_not_null(:col);
+SELECT col_has_default(:col);
+SELECT col_default_is(:col, $$now()$$);
+
+\set col $$[% table %]$$, $$updated_at$$
+
+SELECT has_column(:col);
+SELECT col_type_is(:col, 'timestamp without time zone');
+SELECT col_not_null(:col);
+SELECT col_has_default(:col);
+SELECT col_default_is(:col, $$now()$$);
+
+SELECT col_is_unique(
+  '[% table %]', ARRAY['catalog_id', 'external_code', 'deleted_at']
+);
+
+SELECT finish();
+ROLLBACK;

@@ -1,0 +1,51 @@
+[%- TAGS outline -%][%- PROCESS templates/common -%]
+-- Deploy [% project %]:[% change %] to [% engine %]
+%% FOREACH item IN requires
+-- requires: [% item %]
+%% END
+%% FOREACH item IN conflicts
+-- conflicts: [% item %]
+%% END
+
+BEGIN;
+
+CREATE TABLE IF NOT EXISTS [% qualified(table) %] (
+%% IF syntheticpk
+  id BIGSERIAL PRIMARY KEY,
+%% END
+%% FOREACH col IN fk
+  [% col %] BIGINT NOT NULL,
+%% END
+%% FOREACH col IN column
+  [% col %] [% type.item(loop.index) or 'TEXT' %] NOT NULL,
+%% END
+%% FOREACH col IN json
+  [% col %] JSONB NOT NULL DEFAULT '{}'::JSONB,
+%% END
+%% IF softdelete
+  deleted_at TIMESTAMP WITHOUT TIME ZONE NOT NULL
+    DEFAULT '0001-01-01 00:00:00'::TIMESTAMP WITHOUT TIME ZONE,
+%% END
+  created_at TIMESTAMP WITHOUT TIME ZONE NOT NULL DEFAULT now(),
+  updated_at TIMESTAMP WITHOUT TIME ZONE NOT NULL DEFAULT now(),
+%% IF fk
+
+%%   FOREACH col IN fk
+  CONSTRAINT [% table %]_[% col %]_fkey
+    FOREIGN KEY ([% col %])
+    REFERENCES [% qualified(ref.item(loop.index) OR '<TABLE>') %](id)
+    ON DELETE CASCADE DEFERRABLE INITIALLY DEFERRED[% loop.last ? '' : ',' %]
+%%   END
+%% END
+);
+
+DO $$BEGIN
+%% FOR col IN fk
+  PERFORM [% qualified('presence_validation') %](
+    '[% table %]', '[% col %]',
+    '[% table %]_[% col %]_required'
+  );
+%% END
+END$$;
+
+COMMIT;

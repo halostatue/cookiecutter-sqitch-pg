@@ -1,0 +1,34 @@
+[%- TAGS outline -%][%- PROCESS templates/common -%]
+-- Verify [% project %]:[% change %] on [% engine %]
+%% SET vcols = []
+%% SET vcols = [ 'id' ] IF syntheticpk
+%% CALL vcols.import([ parent_id, 'locale' ])
+%% CALL vcols.import(column.list)
+%% CALL vcols.import([ 'data', 'images', 'urls' ], json.list)
+%% CALL vcols.import([ 'created_at', 'updated_at' ])
+
+BEGIN;
+
+SELECT [% vcols.join(', ') %]
+  FROM [% qualified(table) %]
+ WHERE FALSE;
+
+SELECT [% qualified('has_constraint_validation') %](
+  '[% table %]',
+  '[% table %]_locale_required',
+  throw := true
+);
+SELECT [% qualified('has_constraint_validation') %](
+  '[% table %]',
+  '[% table %]_[% parent_id %]_required',
+  throw := true
+);
+%% IF syntheticpk
+SELECT [% qualified('has_constraint_validation') %](
+  '[% table %]',
+  '[% table %]_unique_on_[% parent_id %]_and_locale',
+  throw := true
+);
+%% END
+
+ROLLBACK;

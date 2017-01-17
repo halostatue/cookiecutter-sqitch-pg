@@ -1,0 +1,10 @@
+[%- TAGS outline -%]
+[%- TRY; PROCESS defaults.tmpl; CATCH file; END; -%]
+%% SET table = change UNLESS table
+%% MACRO qualified(name) IF schema
+[% GET "${schema}.${name}" %][% ELSE %][% name -%]
+%% END
+%% SET parent_table = requires.last UNLESS parent_table
+%% SET parent_table = '<PARENT_TABLE>' UNLESS parent_table
+%% SET parent_id = '<PARENT_TABLE_ID>'
+%% SET parent_id = "${parent}_id" IF parent

@@ -1,0 +1,19 @@
+{
+  "project_name": "Name of the project",
+  "project_slug": "{{ cookiecutter.project_name.lower().replace(' ', '-') }}",
+  "project_service": [ "github.com", "bitbucket.org" ],
+  "default_schema": "",
+  "development_database": "{{ cookiecutter.project_slug.replace('-', '_') }}_development",
+  "username": "Your git service username",
+  "full_name": "Your name",
+  "email": "Your address email (eq. you@example.com)",
+  "release_date": "{% now 'local' %}",
+  "version": "0.1.0",
+  "project_short_description": "A short description of the project",
+  "_extensions": ["jinja2_time.TimeExtension"],
+  "_copy_without_render": [
+    "setup.sh"
+  ]
+}
+
+
