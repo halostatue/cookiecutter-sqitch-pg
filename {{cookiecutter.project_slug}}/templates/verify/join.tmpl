@@ -10,19 +10,4 @@ SELECT [% vcols.join(', ') %]
   FROM [% qualified(table) %]
  WHERE FALSE;
 
-%% FOR col IN fk
-SELECT [% qualified('has_constraint_validation') %](
-  '[% table %]',
-  '[% table %]_[% col %]_required',
-  throw := true
-);
-%% END
-%% IF syntheticpk
-SELECT [% qualified('has_constraint_validation') %](
-  '[% table %]',
-  '[% table %]_uk_[% fk.join('_') %]',
-  throw := true
-);
-%% END
-
 ROLLBACK;

@@ -39,13 +39,4 @@ CREATE TABLE IF NOT EXISTS [% qualified(table) %] (
 %% END
 );
 
-DO $$BEGIN
-%% FOR col IN fk
-  PERFORM [% qualified('presence_validation') %](
-    '[% table %]', '[% col %]',
-    '[% table %]_[% col %]_required'
-  );
-%% END
-END$$;
-
 COMMIT;

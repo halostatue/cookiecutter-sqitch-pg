@@ -45,20 +45,4 @@ CREATE TABLE IF NOT EXISTS [% qualified(table) %] (
     ON DELETE CASCADE DEFERRABLE INITIALLY DEFERRED
 );
 
-DO $$BEGIN
-  PERFORM [% qualified('presence_validation') %](
-    '[% table %]', 'locale', '[% table %]_locale_required'
-  );
-  PERFORM [% qualified('presence_validation') %](
-    '[% table %]', '[% parent_id %]',
-    '[% table %]_[% parent_id %]_required'
-  );
-%% IF syntheticpk
-  PERFORM [% qualified('unique_validation') %](
-    '[% table %]', ARRAY['[% parent_id %]', 'locale'],
-    '[% table %]_[% parent_id %]_required'
-  );
-%% END
-END$$;
-
 COMMIT;

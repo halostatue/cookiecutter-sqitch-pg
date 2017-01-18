@@ -46,23 +46,4 @@ CREATE TABLE IF NOT EXISTS [% qualified(table) %] (
     UNIQUE (catalog_id, external_code, deleted_at)
 );
 
-DO $$BEGIN
-  PERFORM [% qualified('presence_validation') %](
-    '[% table %]', 'catalog_id', '[% table %]_catalog_id_required'
-  );
-%% FOR col IN fk
-  PERFORM [% qualified('presence_validation') %](
-    '[% table %]', '[% col %]',
-    '[% table %]_[% col %]_required'
-  );
-%% END
-  PERFORM [% qualified('presence_validation') %](
-    '[% table %]', 'external_code', '[% table %]_external_code_required'
-  );
-  PERFORM [% qualified('unique_validation') %](
-    '[% table %]', ARRAY['catalog_id', 'external_code', 'deleted_at'],
-    '[% table %]_uk_catalog_id_external_code_and_deleted_at'
-  );
-END$$;
-
 COMMIT;

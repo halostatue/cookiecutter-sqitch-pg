@@ -12,25 +12,4 @@ SELECT [% vcols.join(', ') %]
   FROM [% qualified(table) %]
  WHERE FALSE;
 
-SELECT [% qualified('has_constraint_validation') %](
-  '[% table %]', '[% table %]_external_code_required',
-  throw := true
-);
-SELECT [% qualified('has_constraint_validation') %](
-  '[% table %]', '[% table %]_catalog_id_required',
-  throw := true
-);
-%% FOR col IN fk
-SELECT [% qualified('has_constraint_validation') %](
-  '[% table %]',
-  '[% table %]_[% col %]_required',
-  throw := true
-);
-%% END
-SELECT [% qualified('has_constraint_validation') %](
-  '[% table %]',
-  '[% table %]_uk_catalog_id_external_code_and_deleted_at',
-  throw := true
-);
-
 ROLLBACK;
