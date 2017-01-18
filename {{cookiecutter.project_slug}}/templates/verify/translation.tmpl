@@ -13,22 +13,4 @@ SELECT [% vcols.join(', ') %]
   FROM [% qualified(table) %]
  WHERE FALSE;
 
-SELECT [% qualified('has_constraint_validation') %](
-  '[% table %]',
-  '[% table %]_locale_required',
-  throw := true
-);
-SELECT [% qualified('has_constraint_validation') %](
-  '[% table %]',
-  '[% table %]_[% parent_id %]_required',
-  throw := true
-);
-%% IF syntheticpk
-SELECT [% qualified('has_constraint_validation') %](
-  '[% table %]',
-  '[% table %]_unique_on_[% parent_id %]_and_locale',
-  throw := true
-);
-%% END
-
 ROLLBACK;

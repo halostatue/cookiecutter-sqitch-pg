@@ -3,10 +3,6 @@
 
 BEGIN;
 
-DO $$BEGIN
-  PERFORM [% qualified('delete_constraint_validation') %]('[% table %]');
-END$$;
-
 DROP TABLE [% qualified(table) %];
 
 COMMIT;

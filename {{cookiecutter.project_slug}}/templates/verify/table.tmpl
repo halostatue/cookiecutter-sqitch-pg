@@ -12,12 +12,4 @@ SELECT [% vcols.join(', ') %]
   FROM [% qualified(table) %]
  WHERE FALSE;
 
-%% FOR col IN fk
-SELECT [% qualified('has_constraint_validation') %](
-  '[% table %]',
-  '[% table %]_[% col %]_required',
-  throw := true
-);
-%% END
-
 ROLLBACK;
