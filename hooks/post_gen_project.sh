@@ -1,12 +1,16 @@
 #!/bin/bash
 
-if ! $(type -aP sqitch > /dev/null); then
+pgtap="{{ cookiecutter.pgtap }}"
+[[ ${pgtap} == 'no' ]] && rm -rf test
+
+if ! type -aP sqitch > /dev/null; then
   printf "Sqitch is not installed.\n"
+  # shellcheck disable=SC2019,SC2018
   if [[ $(uname | tr 'A-Z' 'a-z') == "darwin" ]]; then
-    print "Installing sqitch..."
+    printf "Installing sqitch...\n"
     ./setup.sh
   else
-    print "Installing sqitch... (uses sudo to install the appropriate packages)"
+    printf "Installing sqitch... (uses sudo to install the appropriate packages)\n"
     sudo ./setup.sh
   fi
 fi
