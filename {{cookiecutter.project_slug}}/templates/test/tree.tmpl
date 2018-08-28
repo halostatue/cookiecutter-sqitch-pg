@@ -1,0 +1,53 @@
+[%- TAGS outline -%][%- PROCESS templates/common -%]
+-- Test [% project %]:[% change %] on [% engine %]
+%% SET fktype = fk_type().lower
+%% SET has_pk_seq = (fktype == 'bigint' OR fktype == 'integer')
+%% SET test_count = 3
+%% SET test_count = test_count + (syntheticpk ? (has_pk_seq ? 6 : 4) : 1)
+
+SET client_min_messages TO warning;
+CREATE EXTENSION IF NOT EXISTS pgtap;
+RESET client_min_messages;
+SET search_path TO [% IF schema %][% schema %],[% END %]public;
+
+BEGIN;
+SELECT plan([% test_count %]);
+
+SELECT has_table('[% table %]');
+SELECT has_pk('[% table %]');
+
+SELECT columns_are(
+  '[% table %]',
+  ARRAY[
+%% IF syntheticpk
+    'id',
+%% END
+    'ancestor_id',
+    'descendant_id',
+    'generation'
+  ]
+);
+
+%% IF syntheticpk
+\set col $$[% table %]$$, $$id$$
+
+SELECT has_column(:col);
+SELECT col_type_is(:col, '[% fktype %]');
+%% IF has_pk_seq
+SELECT col_has_default(:col);
+SELECT col_default_is(:col, $$nextval('[% table %]_id_seq'::regclass)$$);
+%% END
+SELECT col_is_pk(:col);
+SELECT col_is_unique(
+  '[% table %]',
+  ARRAY['ancestor_id', 'descendant_id']
+);
+%% ELSE
+SELECT col_is_pk(
+  '[% table %]',
+  ARRAY['ancestor_id', 'descendant_id']
+);
+%% END
+
+SELECT finish();
+ROLLBACK;

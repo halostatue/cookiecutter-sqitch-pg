@@ -11,22 +11,27 @@ BEGIN;
 
 CREATE TABLE IF NOT EXISTS [% qualified(table) %] (
 %% IF syntheticpk
-  id BIGSERIAL PRIMARY KEY,
+  id [% pk_type %] PRIMARY KEY,
 
 %% END
-  [% parent_id %] BIGINT NOT NULL,
-  locale TEXT NOT NULL,
+  [% parent_id %] [% fk_type %] NOT NULL,
+  locale citext NOT NULL,
+%% IF column
+
 %% FOREACH col IN column
-  [% col %] [% type.item(loop.index) or 'TEXT' %] NOT NULL,
+  [% col %] [% type.item(loop.index) or 'text' %] NOT NULL,
 %% END
-  data JSONB NOT NULL DEFAULT '{}'::JSONB,
-  images JSONB NOT NULL DEFAULT '{}'::JSONB,
-  urls JSONB NOT NULL DEFAULT '{}'::JSONB,
+%% END
+
+  data jsonb NOT NULL DEFAULT '{}'::jsonb,
+  images jsonb NOT NULL DEFAULT '[]'::jsonb,
+  urls jsonb NOT NULL DEFAULT '[]'::jsonb,
 %% FOREACH col IN json
-  [% col %] JSONB NOT NULL DEFAULT '{}'::JSONB,
+  [% col %] jsonb NOT NULL DEFAULT '{}'::jsonb,
 %% END
-  created_at TIMESTAMP WITHOUT TIME ZONE NOT NULL DEFAULT now(),
-  updated_at TIMESTAMP WITHOUT TIME ZONE NOT NULL DEFAULT now(),
+
+  inserted_at timestamp without time zone NOT NULL DEFAULT now(),
+  updated_at timestamp without time zone NOT NULL DEFAULT now(),
 
 %% IF syntheticpk
   CONSTRAINT [% table %]_pkey

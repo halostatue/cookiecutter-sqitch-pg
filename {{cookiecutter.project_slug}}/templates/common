@@ -1,10 +1,11 @@
 [%- TAGS outline -%]
 [%- TRY; PROCESS defaults.tmpl; CATCH file; END; -%]
 %% SET table = change UNLESS table
-%% MACRO qualified(name) IF schema
-[% GET "${schema}.${name}" %][% ELSE %][% name -%]
-%% END
+%% SET enum = change UNLESS enum
 %% SET parent_table = requires.last UNLESS parent_table
 %% SET parent_table = '<PARENT_TABLE>' UNLESS parent_table
 %% SET parent_id = '<PARENT_TABLE_ID>'
 %% SET parent_id = "${parent}_id" IF parent
+[% MACRO qualified(name) IF schema %][% schema %].[% name %][% ELSE %][% name %][% END -%]
+[% MACRO pk_type IF pktype %][% pktype %][% ELSE %]uuid[% END -%]
+[% MACRO fk_type SWITCH pktype %][% CASE 'bigserial' %]bigint[% CASE 'serial' %]int[% CASE DEFAULT %][% IF pktype %][% pktype %][% ELSE %]uuid[% END %][% END -%]

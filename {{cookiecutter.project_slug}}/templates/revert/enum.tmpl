@@ -1,9 +1,8 @@
 [%- TAGS outline -%][%- PROCESS templates/common -%]
 -- Revert [% project %]:[% change %] from [% engine %]
-[% IF schema %]SET search_path TO [% schema %],public;[% END -%]
 
 BEGIN;
 
--- XXX Add DDLs here.
+DROP TYPE [% enum %];
 
 COMMIT;

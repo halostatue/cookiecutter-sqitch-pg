@@ -11,16 +11,20 @@ BEGIN;
 
 CREATE TABLE IF NOT EXISTS [% qualified(table) %] (
 %% IF syntheticpk
-  id BIGSERIAL PRIMARY KEY,
+  id [% pk_type %] PRIMARY KEY,
 %% END
 %% FOREACH col IN fk
-  [% col %] BIGINT NOT NULL,
+  [% col %] [% fk_type %] NOT NULL,
 %% END
 %% FOREACH col IN column
-  [% col %] [% type.item(loop.index) or 'TEXT' %] NOT NULL,
+  [% col %] [% type.item(loop.index) or 'text' %] NOT NULL,
 %% END
 %% FOREACH col IN json
-  [% col %] JSONB NOT NULL DEFAULT '{}'::JSONB,
+  [% col %] jsonb NOT NULL DEFAULT '{}'::jsonb,
+%% END
+%% IF timestamps
+  inserted_at timestamp without time zone NOT NULL DEFAULT now(),
+  updated_at timestamp without time zone NOT NULL DEFAULT now()[% IF fk %],[% END %]
 %% END
 
 %% FOREACH col IN fk

@@ -1,9 +1,7 @@
 [%- TAGS outline -%][%- PROCESS templates/common -%]
 -- Verify [% project %]:[% change %] on [% engine %]
-%% SET vcols = []
+%% SET vcols = [ 'ancestor_id', 'descendant_id', 'generation' ]
 %% SET vcols = [ 'id' ] IF syntheticpk
-%% CALL vcols.import(fk.list, column.list, json.list)
-%% CALL vcols.import(['inserted_at', 'updated_at']) IF timestamps
 
 BEGIN;
 

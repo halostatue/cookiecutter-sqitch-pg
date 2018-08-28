@@ -1,0 +1,12 @@
+[%- TAGS outline -%][%- PROCESS templates/common -%]
+-- Verify [% project %]:[% change %] on [% engine %]
+
+BEGIN;
+
+SELECT 1
+  FROM pg_type
+ WHERE typname = '[% enum %]';
+
+SELECT '[% label.join("'::$enum, '") %]'::[% enum %];
+
+ROLLBACK;

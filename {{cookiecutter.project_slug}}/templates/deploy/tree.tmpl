@@ -1,0 +1,39 @@
+[%- TAGS outline -%][%- PROCESS templates/common -%]
+-- Deploy [% project %]:[% change %] to [% engine %]
+%% FOREACH item IN requires
+-- requires: [% item %]
+%% END
+%% FOREACH item IN conflicts
+-- conflicts: [% item %]
+%% END
+
+BEGIN;
+
+CREATE TABLE IF NOT EXISTS [% qualified(table) %] (
+%% IF syntheticpk
+  id [% pk_type %] PRIMARY KEY,
+%% END
+  ancestor_id [% fk_type %] NOT NULL,
+  descendant_id [% fk_type %] NOT NULL,
+  generation integer NOT NULL,
+
+%% IF syntheticpk
+  CONSTRAINT [% table %]_pkey
+    PRIMARY KEY (id),
+  CONSTRAINT [% table %]_unique_on_ancestor_id_and_descendant_id
+    UNIQUE (ancestor_id, descendant_id),
+%% ELSE
+  CONSTRAINT [% table %]_pkey
+    PRIMARY KEY (ancestor_id, descendant_id),
+%% END
+  CONSTRAINT [% table %]_ancestor_id_fkey
+    FOREIGN KEY (ancestor_id)
+    REFERENCES [% qualified(parent_table) %](id)
+    ON DELETE CASCADE DEFERRABLE INITIALLY DEFERRED,
+  CONSTRAINT [% table %]_descendant_id_fkey
+    FOREIGN KEY (descendant_id)
+    REFERENCES [% qualified(parent_table) %](id)
+    ON DELETE CASCADE DEFERRABLE INITIALLY DEFERRED
+);
+
+COMMIT;

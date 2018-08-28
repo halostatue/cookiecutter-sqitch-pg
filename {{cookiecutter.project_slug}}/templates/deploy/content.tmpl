@@ -10,25 +10,36 @@
 BEGIN;
 
 CREATE TABLE IF NOT EXISTS [% qualified(table) %] (
-  id BIGSERIAL PRIMARY KEY,
-  catalog_id BIGINT NOT NULL,
-%% FOREACH col IN fk
-  [% col %] BIGINT NOT NULL,
+  id [% pk_type %] PRIMARY KEY,
+  catalog_id [% fk_type %] NOT NULL,
+  code citext NOT NULL,
+  revision_marker text,
+%% IF column
+
+%%   FOREACH col IN column
+  [% col %] [% type.item(loop.index) or 'text' %] NOT NULL,
+%%   END
 %% END
-  external_code TEXT NOT NULL,
-%% FOREACH col IN column
-  [% col %] [% type.item(loop.index) or 'TEXT' %] NOT NULL,
-%% END
-  data JSONB NOT NULL DEFAULT '{}'::JSONB,
-  images JSONB NOT NULL DEFAULT '{}'::JSONB,
-  urls JSONB NOT NULL DEFAULT '{}'::JSONB,
+
+  data jsonb NOT NULL DEFAULT '{}'::jsonb,
+  images jsonb NOT NULL DEFAULT '[]'::jsonb,
+  urls jsonb NOT NULL DEFAULT '[]'::jsonb,
 %% FOREACH col IN json
-  [% col %] JSONB NOT NULL DEFAULT '{}'::JSONB,
+  [% col %] jsonb NOT NULL DEFAULT '{}'::jsonb,
 %% END
-  deleted_at TIMESTAMP WITHOUT TIME ZONE NOT NULL
-    DEFAULT '0001-01-01 00:00:00'::TIMESTAMP WITHOUT TIME ZONE,
-  created_at TIMESTAMP WITHOUT TIME ZONE NOT NULL DEFAULT now(),
-  updated_at TIMESTAMP WITHOUT TIME ZONE NOT NULL DEFAULT now(),
+%% IF fk
+
+%% FOREACH col IN fk
+  [% col %] [% fk_type %] NOT NULL,
+%% END
+%% END
+
+%% IF softdelete
+  deleted_at timestamp without time zone NOT NULL
+    DEFAULT '0001-01-01 00:00:00'::timestamp with time zone,
+%% END
+  inserted_at timestamp without time zone NOT NULL DEFAULT now(),
+  updated_at timestamp without time zone NOT NULL DEFAULT now(),
 
   CONSTRAINT [% table %]_catalog_id_fkey
     FOREIGN KEY (catalog_id)
@@ -40,10 +51,10 @@ CREATE TABLE IF NOT EXISTS [% qualified(table) %] (
     REFERENCES [% qualified(ref.item(loop.index) OR '<TABLE>') %](id)
     ON DELETE CASCADE DEFERRABLE INITIALLY DEFERRED,
 %% END
-  CONSTRAINT [% table %]_external_code_required
-    CHECK ((external_code IS NOT NULL) AND (btrim(external_code::text) <> ''::text)),
-  CONSTRAINT [% table %]_uk_catalog_id_external_code_and_deleted_at
-    UNIQUE (catalog_id, external_code, deleted_at)
+  CONSTRAINT [% table %]_code_required
+    CHECK ((code IS NOT NULL) AND (btrim(code::text) <> ''::text)),
+  CONSTRAINT [% table %]_uk_catalog_id_and_code
+    UNIQUE (catalog_id, code)
 );
 
 COMMIT;

@@ -1,10 +1,13 @@
 [%- TAGS outline -%][%- PROCESS templates/common -%]
 -- Test [% project %]:[% change %] on [% engine %]
-%% SET test_count = 2
-%% SET test_count = test_count + (syntheticpk ? 6 : 1)
+%% SET fktype = fk_type().lower
+%% SET has_pk_seq = (fktype == 'bigint' OR fktype == 'integer')
+%% SET test_count = 3
+%% SET test_count = test_count + (syntheticpk ? (has_pk_seq ? 6 : 4) : 1)
+%% SET test_count = test_count + (fk ? (fk.list.size * 6) : 0)
 %% SET test_count = test_count + (column ? (column.list.size * 4) : 0)
 %% SET test_count = test_count + (json ? (json.list.size * 5) : 0)
-%% SET test_count = test_count + (fk ? (fk.list.size * 6) : 0)
+%% SET test_count = test_count + (timestamps ? 10 : 0)
 
 SET client_min_messages TO warning;
 CREATE EXTENSION IF NOT EXISTS pgtap;
@@ -17,13 +20,37 @@ SELECT plan([% test_count %]);
 SELECT has_table('[% table %]');
 SELECT has_pk('[% table %]');
 
+SELECT columns_are(
+  '[% table %]',
+  ARRAY[
+%% IF syntheticpk
+    'id',
+%% END
+%% FOREACH col IN fk
+    '[% col %]'[% loop.last ? (column or json or timestamps ? ',' : '') : ',' %]
+%% END
+%% FOREACH col IN column
+    '[% col %]'[% loop.last ? (json or timestamps ? ',' : '') : ',' %]
+%% END
+%% FOREACH col IN json
+    '[% col %]'[% loop.last ? (timestamps ? ',' : '') : ',' %]
+%% END
+%% IF timestamps
+    'inserted_at',
+    'updated_at'
+%% END
+  ]
+);
+
 %% IF syntheticpk
 \set col $$[% table %]$$, $$id$$
 
 SELECT has_column(:col);
-SELECT col_type_is(:col, 'bigint');
+SELECT col_type_is(:col, '[% fktype %]');
+%% IF has_pk_seq
 SELECT col_has_default(:col);
 SELECT col_default_is(:col, $$nextval('[% table %]_id_seq'::regclass)$$);
+%% END
 SELECT col_is_pk(:col);
 SELECT col_is_unique(
   '[% table %]',
@@ -40,17 +67,17 @@ SELECT col_is_pk(
 \set col $$[% table %]$$, $$[% col %]$$
 
 SELECT has_column(:col);
-SELECT col_type_is(:col, 'bigint');
+SELECT col_type_is(:col, '[% fktype %]');
 SELECT col_hasnt_default(:col);
 SELECT col_is_fk(:col);
 SELECT col_not_null(:col);
-SELECT fk_ok(:col, '[% ref.item(loop.index) or '<TABLE>' %]', 'id');
+SELECT fk_ok(:col, '[% ref.item(loop.index) OR '<TABLE>' %]', 'id');
 
 %% END
 %% FOREACH col IN column
 \set col $$[% table %]$$, $$[% col %]$$
 
-%% SET coltype = (type.item(loop.index) or 'TEXT')
+%% SET coltype = (type.item(loop.index) OR 'text')
 SELECT has_column(:col);
 SELECT col_type_is(:col, '[% coltype.lower %]');
 SELECT col_not_null(:col);
@@ -65,6 +92,24 @@ SELECT col_type_is(:col, 'jsonb');
 SELECT col_not_null(:col);
 SELECT col_has_default(:col);
 SELECT col_default_is(:col, '{}'::jsonb);
+
+%% END
+%% IF timestamps
+\set col $$[% table %]$$, $$inserted_at$$
+
+SELECT has_column(:col);
+SELECT col_type_is(:col, 'timestamp without time zone');
+SELECT col_not_null(:col);
+SELECT col_has_default(:col);
+SELECT col_default_is(:col, $$now()$$);
+
+\set col $$[% table %]$$, $$updated_at$$
+
+SELECT has_column(:col);
+SELECT col_type_is(:col, 'timestamp without time zone');
+SELECT col_not_null(:col);
+SELECT col_has_default(:col);
+SELECT col_default_is(:col, $$now()$$);
 
 %% END
 SELECT finish();

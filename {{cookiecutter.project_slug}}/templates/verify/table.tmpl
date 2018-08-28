@@ -4,7 +4,7 @@
 %% SET vcols = [ 'id' ] IF syntheticpk
 %% CALL vcols.import(fk.list, column.list, json.list)
 %% CALL vcols.import([ 'deleted_at' ]) IF softdelete
-%% CALL vcols.import([ 'created_at', 'updated_at' ])
+%% CALL vcols.import([ 'inserted_at', 'updated_at' ])
 
 BEGIN;
 

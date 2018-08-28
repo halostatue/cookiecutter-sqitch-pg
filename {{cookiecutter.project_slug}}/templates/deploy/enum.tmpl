@@ -1,0 +1,22 @@
+[%- TAGS outline -%][%- PROCESS templates/common -%]
+-- Deploy [% project %]:[% change %] to [% engine %]
+%% FOREACH item IN requires
+-- requires: [% item %]
+%% END
+%% FOREACH item IN conflicts
+-- conflicts: [% item %]
+%% END
+
+BEGIN;
+
+DO $$BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = '[% enum %]') THEN
+    CREATE TYPE [% enum %] AS ENUM (
+%% FOREACH lbl IN label
+      '[% lbl.lower %]'[% loop.last ? '' : ',' %]
+%% END
+    );
+  END IF;
+END$$;
+
+COMMIT;

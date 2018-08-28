@@ -1,10 +1,11 @@
 [%- TAGS outline -%][%- PROCESS templates/common -%]
 -- Verify [% project %]:[% change %] on [% engine %]
-%% SET vcols = [ 'id', 'catalog_id' ]
-%% CALL vcols.import(fk.list)
-%% CALL vcols.import([ 'external_code' ], column.list)
+%% SET vcols = [ 'id' ]
+%% CALL vcols.import([ 'catalog_id' ], fk.list)
+%% CALL vcols.import([ 'code', 'revision_marker' ], column.list)
 %% CALL vcols.import([ 'data', 'images', 'urls' ], json.list)
-%% CALL vcols.import([ 'deleted_at', 'created_at', 'updated_at' ])
+%% CALL vcols.import([ 'deleted_at' ]) IF softdelete
+%% CALL vcols.import([ 'inserted_at', 'updated_at' ])
 
 BEGIN;
 

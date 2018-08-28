@@ -1,9 +1,17 @@
 [%- TAGS outline -%][%- PROCESS templates/common -%]
 -- Test [% project %]:[% change %] on [% engine %]
-%% SET test_count = 49
-%% SET test_count = test_count + (column ? (column.size * 4) : 0)
-%% SET test_count = test_count + (json ? (json.size * 5) : 0)
+%% SET fktype = fk_type().lower
+%% SET has_pk_seq = (fktype == 'bigint' OR fktype == 'integer')
+%% SET test_count = 3
+%% SET test_count = test_count + 3 + (has_pk_seq ? 2 : 0)
+%% SET test_count = test_count + 6
 %% SET test_count = test_count + (fk ? (fk.size * 6) : 0)
+%% SET test_count = test_count + 5 + 3
+%% SET test_count = test_count + (column ? (column.size * 4) : 0)
+%% SET test_count = test_count + 5 + 5 + 5
+%% SET test_count = test_count + (json ? (json.size * 5) : 0)
+%% SET test_count = test_count + (softdelete ? 5 : 0)
+%% SET test_count = test_count + 5 + 5 + 1
 
 SET client_min_messages TO warning;
 CREATE EXTENSION IF NOT EXISTS pgtap;
@@ -16,18 +24,47 @@ SELECT plan([% test_count %]);
 SELECT has_table('[% table %]');
 SELECT has_pk('[% table %]');
 
+SELECT columns_are(
+  '[% table %]',
+  ARRAY[
+    'id',
+    'catalog_id',
+    'code',
+    'revision_marker',
+%% FOREACH col IN column
+    '[% col %]',
+%% END
+    'data',
+    'images',
+    'urls',
+%% FOREACH col IN json
+    '[% col %]',
+%% END
+%% FOREACH col IN fk
+    '[% col %]',
+%% END
+%% IF softdelete
+    'deleted_at',
+%% END
+    'inserted_at',
+    'updated_at'
+  ]
+);
+
 \set col $$[% table %]$$, $$id$$
 
 SELECT has_column(:col);
-SELECT col_type_is(:col, 'bigint');
+SELECT col_type_is(:col, '[% fktype %]');
+%% IF has_pk_seq
 SELECT col_has_default(:col);
 SELECT col_default_is(:col, $$nextval('[% table %]_id_seq'::regclass)$$);
+%% END
 SELECT col_is_pk(:col);
 
 \set col $$[% table %]$$, $$catalog_id$$
 
 SELECT has_column(:col);
-SELECT col_type_is(:col, 'bigint');
+SELECT col_type_is(:col, '[% fktype %]');
 SELECT col_hasnt_default(:col);
 SELECT col_is_fk(:col);
 SELECT col_not_null(:col);
@@ -37,25 +74,31 @@ SELECT fk_ok(:col, 'catalogs', 'id');
 \set col $$[% table %]$$, $$[% col %]$$
 
 SELECT has_column(:col);
-SELECT col_type_is(:col, 'bigint');
+SELECT col_type_is(:col, '[% fktype %]');
 SELECT col_hasnt_default(:col);
 SELECT col_is_fk(:col);
 SELECT col_not_null(:col);
-SELECT fk_ok(:col, '[% ref.item(loop.index) or 'TABLE' %]', 'id');
+SELECT fk_ok(:col, '[% ref.item(loop.index) OR 'TABLE' %]', 'id');
 
 %% END
-\set col $$[% table %]$$, $$external_code$$
+\set col $$[% table %]$$, $$code$$
 
 SELECT has_column(:col);
-SELECT col_type_is(:col, 'text');
+SELECT col_type_is(:col, 'citext');
 SELECT col_not_null(:col);
 SELECT col_hasnt_default(:col);
 SELECT col_has_check(:col);
 
+\set col $$[% table %]$$, $$revision_marker$$
+
+SELECT has_column(:col);
+SELECT col_type_is(:col, 'text');
+SELECT col_is_null(:col);
+
 %% FOREACH col IN column
 \set col $$[% table %]$$, $$[% col %]$$
 
-%% SET coltype = (type.item(loop.index) or 'TEXT')
+%% SET coltype = (type.item(loop.index) OR 'text')
 SELECT has_column(:col);
 SELECT col_type_is(:col, '[% coltype.lower %]');
 SELECT col_not_null(:col);
@@ -76,7 +119,7 @@ SELECT has_column(:col);
 SELECT col_type_is(:col, 'jsonb');
 SELECT col_not_null(:col);
 SELECT col_has_default(:col);
-SELECT col_default_is(:col, '{}'::jsonb);
+SELECT col_default_is(:col, '[]'::jsonb);
 
 \set col $$[% table %]$$, $$urls$$
 
@@ -84,7 +127,7 @@ SELECT has_column(:col);
 SELECT col_type_is(:col, 'jsonb');
 SELECT col_not_null(:col);
 SELECT col_has_default(:col);
-SELECT col_default_is(:col, '{}'::jsonb);
+SELECT col_default_is(:col, '[]'::jsonb);
 
 %% FOREACH col IN json
 \set col $$[% table %]$$, $$[% col %]$$
@@ -96,15 +139,17 @@ SELECT col_has_default(:col);
 SELECT col_default_is(:col, '{}'::jsonb);
 
 %% END
+%% IF softdelete
 \set col $$[% table %]$$, $$deleted_at$$
 
 SELECT has_column(:col);
 SELECT col_type_is(:col, 'timestamp without time zone');
 SELECT col_not_null(:col);
 SELECT col_has_default(:col);
-SELECT col_default_is(:col, '0001-01-01 00:00:00'::TIMESTAMP WITHOUT TIME ZONE);
+SELECT col_default_is(:col, '0001-01-01 00:00:00'::timestamp without time zone);
 
-\set col $$[% table %]$$, $$created_at$$
+%% END
+\set col $$[% table %]$$, $$inserted_at$$
 
 SELECT has_column(:col);
 SELECT col_type_is(:col, 'timestamp without time zone');
@@ -121,7 +166,11 @@ SELECT col_has_default(:col);
 SELECT col_default_is(:col, $$now()$$);
 
 SELECT col_is_unique(
-  '[% table %]', ARRAY['catalog_id', 'external_code', 'deleted_at']
+%% IF softdelete
+  '[% table %]', ARRAY['catalog_id', 'code', 'deleted_at']
+%% ELSE
+  '[% table %]', ARRAY['catalog_id', 'code']
+%% END
 );
 
 SELECT finish();
