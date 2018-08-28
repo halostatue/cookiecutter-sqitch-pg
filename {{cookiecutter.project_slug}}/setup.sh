@@ -3,8 +3,8 @@
 declare install_pgtap postgres_version platform sudo
 declare -a cache_args
 
-install_pgtap="${1:-package-install}"
-postgres_version="9.6"
+install_pgtap="${1:-{{ cookiecutter.pgtap }}}"
+postgres_version="{{ cookiecutter.postgres_version }}"
 platform="$(uname | tr '[:upper:]' '[:lower:]')"
 sudo=
 
@@ -37,7 +37,7 @@ darwin_homebrew_cleanup()
   for package in "${@}"; do
     brew list "${package}" > /dev/null 2>&1 && brews=(${brews[@]} ${package})
   done
-  (( ${#brews[@]} )) && brew uninstall "${brews[@]}"
+  (( {{ "${#brews[@]}" }} )) && brew uninstall "${brews[@]}"
 }
 
 darwin_hombrew_install()
@@ -47,7 +47,7 @@ darwin_hombrew_install()
   for package in "${@}"; do
     brew list "${package}" > /dev/null 2>&1 || brews=(${brews[@]} ${package})
   done
-  (( ${#brews[@]} )) && brew install "${brews[@]}"
+  (( {{ "${#brews[@]}" }} )) && brew install "${brews[@]}"
 }
 
 install_pgtap_build()
@@ -73,7 +73,7 @@ install_pgtap_linux()
   if [[ -z "${postgres_version}" ]]; then
     echo "No Postgres version specified; skipping..."
   else
-    linux_apt_get_install "postgresql-9.6-pgtap"
+    linux_apt_get_install "postgresql-{{ cookiecutter.postgres_version }}-pgtap"
   fi
 }
 
