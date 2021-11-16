@@ -6,7 +6,6 @@
 %% SET test_count = test_count + (syntheticpk ? (has_pk_seq ? 6 : 4) : 1)
 
 SET client_min_messages TO warning;
-CREATE EXTENSION IF NOT EXISTS pgtap;
 RESET client_min_messages;
 SET search_path TO [% IF schema %][% schema %],[% END %]public;
 

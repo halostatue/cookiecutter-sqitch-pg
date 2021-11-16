@@ -1,0 +1,4 @@
+%syntax-version=1.0.0
+%project={{ cookiecutter.project_slug }}
+%uri=https://{{ cookiecutter.project_service }}/{{ cookiecutter.username }}/{{ cookiecutter.project_slug }}
+

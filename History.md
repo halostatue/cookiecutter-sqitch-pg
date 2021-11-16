@@ -1,10 +1,7 @@
-## NEXT / YYYY-MM-DD
+## 2.0 / 2021-11-15
 
-*   Description of change…
-*   Description of change…
-*   Description of change…
-*   Description of change…
+- Major update to support a Docker-based pass-through sqitch and pgtap runner.
 
 ## 1.0 / 2016-12-06
 
-*   Birthday!
+- Birthday!

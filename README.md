@@ -1,13 +1,10 @@
 # sqitch
 
-[![Travis CI - Build Status][travis.svg]][travis]
-[![Github - Last tag][tags.svg]][tags]
-
 A short description of the project
 
 ## Requirements
 
-Install the `cookiecutter` command line: `pip install cookiecutter`.
+Install the `cookiecutter` command line: `pip install cookiecutter` or `pipx install cookiecutter`.
 
 ## Usage
 
@@ -33,10 +30,6 @@ cookiecutter gh:halostatue/cookiecutter-sqitch
 
 This project is licensed under the terms of the [MIT License](LICENSE.md)
 
-[travis.svg]: https://travis-ci.org/halostatue/cookiecutter-sqitch.svg
-[travis]: https://travis-ci.org/halostatue/cookiecutter-sqitch
-[tags.svg]: https://img.shields.io/github/tag/halostatue/cookiecutter-sqitch.svg
-[tags]: https://github.com/halostatue/cookiecutter-sqitch/tags
-[Cookiecutter]: https://github.com/audreyr/cookiecutter
-[Mamba]: http://nestorsalceda.github.io/mamba/
+[cookiecutter]: https://github.com/cookiecutter/cookiecutter
+[mamba]: http://nestorsalceda.github.io/mamba/
 [repository]: https://github.com/halostatue/cookiecutter-sqitch

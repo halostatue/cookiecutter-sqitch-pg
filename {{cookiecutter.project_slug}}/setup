@@ -1,0 +1,93 @@
+#! /bin/bash
+
+# This is a setup script for Sqitch + PostgreSQL projects in Semaphore CI. There
+# is nothing modifiable in this script. All configuration is handled by
+# parameters or defaults.
+
+puts() {
+  local message
+
+  if [ ${#} -eq 0 ] && [ ! -t 0 ]; then
+    message="$(cat -)"
+  else
+    message="$*"
+  fi
+
+  # shellcheck disable=1117
+  builtin printf "%s\n" "${message}"
+}
+
+puts-stderr() {
+  puts "$@" 1>&2
+}
+
+has() {
+  (($#)) || builtin return 1
+
+  builtin command -v "${@}" >/dev/null
+}
+
+fail-unless() {
+  local -i result
+  "${@}"
+  result=$?
+
+  if ((result)); then
+    fail "${result}" "Error in command: ${*}"
+  else
+    return "${result}"
+  fi
+}
+
+fail() {
+  local -i result
+
+  if [[ "$1" =~ ^[[:digit:]]+$ ]]; then
+    result="$1"
+    shift
+  else
+    result=1
+  fi
+
+  (($#)) && puts-stderr "$@"
+  exit ${result}
+}
+
+valid-pg-version() {
+  local version
+
+  if (($#)); then
+    version="$1"
+  elif [[ -f .pg-version ]]; then
+    # shellcheck disable=SC2162
+    read version <.pg-version
+  else
+    fail "No PostgreSQL version provided or .pg-version file found."
+  fi
+
+  case "${version}" in
+  9.6 | 10 | 11 | 12 | 13) echo "${version}" ;;
+  *) fail "Unknown or unsupported PostgreSQL version '${version}'." ;;
+  esac
+}
+
+configure-pg() {
+  # Stop any running pg, quietly.
+  sem-service stop postgres >/dev/null 2>&1
+
+  local version
+  version="$(valid-pg-version "${1}")" || fail
+
+  fail-unless sem-service start postgres "${version}"
+
+  cat >ci-config <<EOS
+export PGUSER=runner
+export PGPASSWORD=semaphoredb
+export PGHOST=semaphore-vm
+EOS
+}
+
+[[ -z "${CI}" ]] && fail "This can only be run on Semaphore."
+has sem-service || fail "This can only be run on Semaphore."
+
+configure-pg "$@"

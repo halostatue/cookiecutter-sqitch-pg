@@ -1,0 +1,478 @@
+#! /bin/bash
+
+# This is a helper to run Sqitch, pgTAP, and PostgreSQL commands through the
+# kineticcafe/sqitch-pgtap Docker image. There is nothing modifiable in this
+# script. All configuration is handled by parameters or defaults.
+
+puts() {
+  local message
+
+  if [ ${#} -eq 0 ] && [ ! -t 0 ]; then
+    message="$(cat -)"
+  else
+    message="$*"
+  fi
+
+  # shellcheck disable=1117
+  builtin printf "%s\n" "${message}"
+}
+
+puts-stderr() {
+  puts "$@" 1>&2
+}
+
+has() {
+  (($#)) || builtin return 1
+
+  builtin command -v "${@}" >/dev/null
+}
+
+has-function() {
+  LC_ALL=C [ "$(type -t "$1")" == 'function' ]
+}
+
+fail() {
+  local -i result
+
+  if [[ "$1" =~ ^[[:digit:]]+$ ]]; then
+    result="$1"
+    shift
+  else
+    result=1
+  fi
+
+  (($#)) && puts-stderr "Error: $*"
+  exit "${result}"
+}
+
+fail-unless() {
+  local -i result
+  "${@}"
+  result=$?
+
+  if ((result)); then
+    fail "${result}" "Error in command: ${*} (${result})"
+  else
+    return "${result}"
+  fi
+}
+
+declare image DUMP_TARGET TIMESTAMP SQITCH_TARGET SQITCH_DBNAME user uname_s \
+  home_dest tz
+declare -a passopt
+
+setup() {
+  if [[ -n "${CI}" ]] && [[ -f ci-config ]]; then
+    # shellcheck disable=SC1091
+    source ci-config
+  fi
+
+  image=${IMAGE:-kineticcafe/sqitch-pgtap:1.0}
+  user="${USER-$(whoami)}"
+  uname_s="$(uname -s)"
+  DUMP_TARGET=structure.sql
+  TIMESTAMP="$(date -u +%Y%m%d%H%M%S)"
+
+  home_dest=/home/"${user}"
+  if [ "$(id -u "${user}")" -eq 0 ]; then
+    home_dest=/root
+  fi
+
+  tz=$(date +%Z)
+
+  passopt=(
+    -e "SQITCH_ORIG_SYSUSER=${user}"
+    -e "SQITCH_ORIG_EMAIL=${user}@$(hostname)"
+    -e "LESS=${LESS:--R}"
+    -e "HOME=${home_dest}"
+  )
+
+  case "${uname_s}" in
+  Linux*)
+    [ -L /etc/localtime ] && tz=$(readlink /etc/localtime | sed -e 's!/usr/share/zoneinfo/!!')
+    passopt+=(-e "SQITCH_ORIG_FULLNAME=$(getent passwd "${user}" | cut -d: -f5 | cut -d, -f1)")
+    # shellcheck disable=SC2207
+    passopt+=(-u $(id -u "${user}"):$(id -g "${user}"))
+    ;;
+  Darwin*)
+    [ -L /etc/localtime ] && tz=$(readlink /etc/localtime | sed -e 's!/var/db/timezone/zoneinfo/!!')
+    passopt+=(-e "SQITCH_ORIG_FULLNAME=$(/usr/bin/id -P "${user}" | awk -F '[:]' '{print $8}')")
+    ;;
+  MINGW* | CYGWIN*)
+    passopt+=(-e "SQITCH_ORIG_FULLNAME=$(net user "${user}")")
+    ;;
+  *)
+    echo "Unknown OS: ${uname_s}"
+    exit 2
+    ;;
+  esac
+
+  passopt+=(-e "TZ=${tz}")
+
+  local var
+
+  PGHOST="${PGHOST:-host.docker.internal}"
+  PGPORT="${PGPORT:-5432}"
+
+  [[ "${uname_s}" == Darwin ]] && PGUSER="${PGUSER:-${USER}}"
+
+  # PGDATABASE is excluded because we want SQITCH_DBNAME
+  # SQITCH_TARGET is skipped in this list because we handle it below.
+  for var in \
+    SQITCH_CONFIG SQITCH_EMAIL SQITCH_FULLNAME SQITCH_PASSWORD \
+    SQITCH_USERNAME \
+    DBI_TRACE \
+    PGUSER PGPASSWORD PGHOST PGHOSTADDR PGPORT PGSERVICE PGOPTIONS \
+    PGSSLMODE PGREQUIRESSL PGSSLCOMPRESSION PGREQUIREPEER PGKRBSRVNAME \
+    PGKRBSRVNAME PGGSSLIB PGCONNECT_TIMEOUT PGCLIENTENCODING \
+    PGTARGETSESSIONATTRS; do
+    [[ -n "${!var}" ]] && passopt+=(-e "$var=${!var}")
+  done
+
+  local default_target
+  default_target=$(get-sqitch-config --get engine.pg.target)
+
+  SQITCH_TARGET="${SQITCH_TARGET:-${MIX_ENV:-${RAILS_ENV:-${default_target}}}}"
+  passopt+=(-e "SQITCH_TARGET=${SQITCH_TARGET}")
+  SQITCH_DBNAME="${SQITCH_DBNAME:-$(
+    get-sqitch-config --get target."${SQITCH_TARGET}".uri | sed -e 's/^db:pg://'
+  )}"
+
+  passopt+=(-e "PGDATABASE=${PGDATABASE:-${SQITCH_DBNAME}}")
+
+  readonly SQITCH_TARGET SQITCH_DBNAME image DUMP_TARGET TIMESTAMP \
+    user uname_s home_dest
+}
+
+declare -a remove_dump_lines match_dump_lines change_dump_lines
+remove_dump_lines=(
+  '^-- Dumped '
+  'Sqitch database deployment metadata v1'
+  'SET xmloption = content;'
+)
+match_dump_lines=(
+  'CREATE EXTENSION IF NOT EXISTS hstore WITH SCHEMA public;'
+)
+change_dump_lines=(
+  'CREATE EXTENSION IF NOT EXISTS hstore WITH SCHEMA pg_catalog;'
+)
+
+declare sed_commands
+
+prepare-clean-dump-sed-commands() {
+  [ -z "${sed_commands}" ] || return
+
+  if ((${#match_dump_lines[@]} != ${#change_dump_lines[@]})); then
+    echo Match line count must match replace line count. 1>&2
+    exit 124
+  fi
+
+  sed_commands="$(mktemp -d)"/sed_commands
+
+  for remove in "${remove_dump_lines[@]}"; do
+    printf "/%s/d\n" "${remove}" >>"${sed_commands}"
+  done
+
+  local -i i
+
+  for ((i = 0; i < ${#match_dump_lines[@]}; ++i)); do
+    printf "s/%s/%s/\n" \
+      "${match_dump_lines[${i}]}" "${change_dump_lines[${i}]}" \
+      >>"${sed_commands}"
+  done
+}
+
+clean-dump() {
+  sed -f "${sed_commands}" "$1"
+}
+
+run() {
+  (($#)) || fail "No command given to run."
+
+  local cmd
+
+  case "$1" in
+  sh) cmd="sh" ;;
+  sqitch) cmd=/home/sqitch/bin/do_sqitch ;;
+  pg_prove) cmd=/home/sqitch/bin/do_pg_prove ;;
+  pgtap) cmd=/home/sqitch/bin/do_pgtap ;;
+  createdb | dropdb | psql) cmd="$1" ;;
+  pg_config | pg_controldata | pg_ctl) cmd="$1" ;;
+  pg_archivecleanup | pg_basebackup) cmd="$1" ;;
+  pg_dump | pg_dumpall | pg_restore) cmd="$1" ;;
+  pg_isready | pg_standby | pg_test_fsync | pg_test_timing) cmd="$1" ;;
+  pg_recvlogical | pg_rewind | pg_upgrade) cmd="$1" ;;
+  pg_receivexlog | pg_resetxlog | pg_xlogdump) cmd="$1" ;;
+  *)
+    echo "Unsupported run command '$1'."
+    exit 1
+    ;;
+  esac
+
+  shift
+
+  docker run -it --rm --network host \
+    --mount "type=bind,src=$(pwd),dst=/repo" \
+    --mount "type=bind,src=${HOME},dst=${home_dest}" \
+    "${passopt[@]}" "${image}" "${cmd}" "$@"
+}
+
+get-sqitch-config() {
+  local result
+  result="$(run sqitch config "$@" | tr -d '\t\r\n')" ||
+    fail $? "Result - [${result}]"
+  echo "${result}"
+}
+
+# These are commands used by the Makefile.
+
+run-targets() {
+  run sqitch config --get-regexp '^target\.' |
+    cut -f1 -d= | cut -f2 -d.
+}
+
+run-target() {
+  echo "${SQITCH_TARGET}"
+}
+
+run-dbname() {
+  echo "${SQITCH_DBNAME}"
+}
+
+run-test-sqitch() {
+  fail-unless run pgtap test -d "${SQITCH_DBNAME}" --shuffle test/*.sql
+}
+
+run-deploy-sqitch() {
+  local target
+  target="${1:-${SQITCH_TARGET}}"
+  run sqitch deploy "${target}"
+  fail-unless run sqitch status "${target}" >/dev/null 2>&1
+}
+
+run-dump-database() {
+  local dbname target
+  dbname=${1:-${SQITCH_DBNAME}}
+  target=${2:-${DUMP_TARGET}}
+
+  fail-unless run psql -q -d "${dbname}" -c "DROP EXTENSION IF EXISTS pgtap;" 1>/dev/null 2>&1
+  fail-unless run pg_dump -s -O -x -d "${dbname}" | tr -d '\r' >"${target}"
+}
+
+run-dump-clean() {
+  local dbname target
+  dbname="${SQITCH_DBNAME}"_clean
+  target="${1:-${DUMP_TARGET}}"
+
+  echo "Running a clean database dump..."
+
+  if (($(psql --list | grep -c "${dbname}"))); then
+    fail-unless run-dropdb "${dbname}" >/dev/null
+  fi
+  fail-unless run-createdb "${dbname}" >/dev/null
+  fail-unless run-deploy-sqitch db:pg:"${dbname}" >/dev/null
+  fail-unless run-dump-database "${dbname}" "${target}" >/dev/null
+  fail-unless run-dropdb "${dbname}" >/dev/null
+}
+
+run-verify-dump() {
+  local dbname target temp_target
+  dbname="${1:-${SQITCH_DBNAME}}"
+  target="${2:-${DUMP_TARGET}}"
+  temp_target=/tmp/"${target}.$$"
+
+  if ! [ -f "${target}" ]; then
+    echo "No ${target}." 1>&2
+    return 1
+  fi
+
+  prepare-clean-dump-sed-commands
+  fail-unless run-dump-database "${dbname}" "${temp_target}"
+
+  if [ -z "${CI}" ]; then
+    diff -u <(clean-dump "${target}") <(clean-dump "${temp_target}")
+  else
+    # shellcheck disable=SC1007
+    PAGER= diff -u <(clean-dump "${target}") <(clean-dump "${temp_target}")
+  fi
+}
+
+run-bundle() {
+  run sqitch bundle
+}
+
+run-release() {
+  local tarball bundle_path
+  tarball="${1:-release/"${REPO_PATH}-${TIMESTAMP}.tar.gz"}"
+  bundle_path="${2:-bundle}"
+
+  fail-unless mkdir -p "$(dirname "${tarball}")"
+  fail-unless tar cfz "${tarball}" -C "${bundle_path}" .
+  fail-unless rm -rf "${bundle_path}"
+  echo "Bundle created at ${tarball}."
+}
+
+run-upload() {
+  local tarball bucket region filename
+  tarball="${1:-release/"${REPO_PATH}-${TIMESTAMP}.tar.gz"}"
+  bucket="${2:-kcp-pkg}"
+  region="${3:-us-west-2}"
+  filename="$(basename "${tarball}")"
+
+  fail-unless aws s3 cp \
+    "${tarball}" \
+    s3://"${bucket}"/"${filename}" \
+    --region "${region}"
+}
+
+run-remote-release() {
+  if [ -z "${SSH_USER}" ]; then
+    echo "SSH_USER is not defined. Halting." 1>&2
+    exit 126
+  fi
+
+  local host tarball bucket region filename remote_path ssh_config_path
+  tarball="${1:-release/"${REPO_PATH}-${TIMESTAMP}.tar.gz"}"
+  bucket="${2:-kcp-pkg}"
+  region="${3:-us-west-2}"
+  filename="$(basename "${tarball}")"
+  remote_path="./release"
+
+  # shellcheck disable=SC2001
+  host="*$(echo "${SSH_USER}" | sed 's/.*@//')*"
+  ssh_config_path=$(mktemp -d)/ssh_config
+
+  cat >>"${ssh_config_path}" <<EOS
+Host ${host}
+  StrictHostKeyChecking no
+  UserKnownHostsFile=/dev/null
+  ForwardAgent yes
+EOS
+
+  fail-unless ssh -f "${ssh_config_path}" "${SSH_USER}" "mkdir -p '${remote_path}'"
+  fail-unless scp -F "${ssh_config_path}" "${tarball}" "${SSH_USER}":"${remote_path}"
+  fail-unless \
+    ssh -f "${ssh_config_path}" "${SSH_USER}" \
+    "aws s3 cp '${remote_path}/${filename}' 's3://${bucket}/${filename}' --region '${region}'"
+}
+
+# These are commands publicly documented.
+
+run-sh() {
+  run sh "$@"
+}
+
+run-sqitch() {
+  run sqitch "$@"
+}
+
+run-pg_prove() {
+  run pg_prove "$@"
+}
+
+run-pgtap() {
+  run pgtap "$@"
+}
+
+run-createdb() {
+  local db
+  db="${1:-${SQITCH_DBNAME}}"
+  shift
+  run createdb "${db}" "$@"
+}
+
+run-dropdb() {
+  local db
+  db="${1:-${SQITCH_DBNAME}}"
+  shift
+  run dropdb "${db}" "$@"
+}
+
+run-psql() {
+  run psql "$@"
+}
+
+run-pg_config() {
+  run pg_config "$@"
+}
+
+run-pg_controldata() {
+  run pg_controldata "$@"
+}
+
+run-pg_ctl() {
+  run pg_ctl "$@"
+}
+
+run-pg_archivecleanup() {
+  run pg_archivecleanup "$@"
+}
+
+run-pg_basebackup() {
+  run pg_basebackup "$@"
+}
+
+run-pg_dump() {
+  run pg_dump "$@"
+}
+
+run-pg_dumpall() {
+  run pg_dumpall "$@"
+}
+
+run-pg_restore() {
+  run pg_restore "$@"
+}
+
+run-pg_isready() {
+  run pg_isready "$@"
+}
+
+run-pg_standby() {
+  run pg_standby "$@"
+}
+
+run-pg_test_fsync() {
+  run pg_test_fsync "$@"
+}
+
+run-pg_test_timing() {
+  run pg_test_timing "$@"
+}
+
+run-pg_recvlogical() {
+  run pg_recvlogical "$@"
+}
+
+run-pg_rewind() {
+  run pg_rewind "$@"
+}
+
+run-pg_upgrade() {
+  run pg_upgrade "$@"
+}
+
+run-pg_receivexlog() {
+  run pg_receivexlog "$@"
+}
+
+run-pg_resetxlog() {
+  run pg_resetxlog "$@"
+}
+
+run-pg_xlogdump() {
+  run pg_xlogdump "$@"
+}
+
+declare cmd
+cmd="$1"
+shift
+
+has-function "run-${cmd}"
+
+if has-function "run-${cmd}"; then
+  setup
+  run-"${cmd}" "$@"
+else
+  fail 127 "Unknown command ${cmd}."
+fi

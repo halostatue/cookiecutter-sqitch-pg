@@ -10,7 +10,6 @@
 %% SET test_count = test_count + (timestamps ? 10 : 0)
 
 SET client_min_messages TO warning;
-CREATE EXTENSION IF NOT EXISTS pgtap;
 RESET client_min_messages;
 SET search_path TO [% IF schema %][% schema %],[% END %]public;
 
